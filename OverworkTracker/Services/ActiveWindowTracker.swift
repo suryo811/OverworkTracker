@@ -23,9 +23,11 @@ final class ActiveWindowTracker {
         guard !isTracking else { return }
         isTracking = true
 
-        timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        let t = Timer(timeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.tick()
         }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
     }
 
     func stop() {
@@ -62,13 +64,13 @@ final class ActiveWindowTracker {
         // 3. Get window title (if accessibility granted)
         let windowTitle = Self.windowTitle(for: frontApp.processIdentifier)
 
-        // 4. Compare with current session
+        // 4. Compare with current session — session boundary is app change only
         let sameApp = bundleID == currentBundleID
-        let sameWindow = windowTitle == currentWindowTitle
 
-        if let sessionID = currentSessionID, sameApp, sameWindow {
-            // Extend current session
+        if let sessionID = currentSessionID, sameApp {
+            // Extend current session, update window title in place
             accumulatedDuration += 5.0
+            currentWindowTitle = windowTitle
             let endTime = Date()
             try? db.updateSessionDuration(
                 id: sessionID,
@@ -76,7 +78,7 @@ final class ActiveWindowTracker {
                 endTime: endTime
             )
         } else {
-            // New app/window — start a new session
+            // App changed — start a new session
             finalizeCurrentSession()
             startNewSession(appName: appName, bundleID: bundleID, windowTitle: windowTitle)
         }
@@ -96,8 +98,7 @@ final class ActiveWindowTracker {
         )
 
         do {
-            try db.insertSession(&session)
-            currentSessionID = session.id
+            currentSessionID = try db.insertSession(session)
             currentBundleID = bundleID
             currentWindowTitle = windowTitle
             currentSessionStart = now

@@ -16,12 +16,7 @@ final class DashboardViewModel {
     }
 
     var formattedTotal: String {
-        let hours = Int(totalSecondsToday) / 3600
-        let minutes = (Int(totalSecondsToday) % 3600) / 60
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        }
-        return "\(minutes)m"
+        AppUsageSummary.format(totalSecondsToday)
     }
 
     var maxDuration: TimeInterval {

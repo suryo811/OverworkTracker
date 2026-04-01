@@ -44,12 +44,11 @@ final class DatabaseManager: Sendable {
 
     // MARK: - Write Operations
 
-    @discardableResult
-    func insertSession(_ session: inout TrackingSession) throws -> TrackingSession {
+    func insertSession(_ session: TrackingSession) throws -> Int64 {
         try dbQueue.write { db in
             try session.insert(db)
+            return db.lastInsertedRowID
         }
-        return session
     }
 
     func updateSessionDuration(id: Int64, duration: TimeInterval, endTime: Date) throws {
