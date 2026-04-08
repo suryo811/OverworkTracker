@@ -9,14 +9,17 @@ OverworkTracker is a macOS menu bar app (Swift 6, SwiftUI, SPM) that monitors fo
 ## Build & Run
 
 ```bash
-# Build (debug)
+# Development build (debug symbols, faster compile, assertions enabled)
 swift build
 
-# Build (release)
+# Run in development mode
+swift run OverworkTracker
+
+# Production build (optimized, no debug symbols)
 swift build -c release
 
-# Run
-swift run OverworkTracker
+# Run production build directly
+.build/release/OverworkTracker
 ```
 
 There are no tests, no linter, and no Makefile. VS Code launch configs exist for debug/release.

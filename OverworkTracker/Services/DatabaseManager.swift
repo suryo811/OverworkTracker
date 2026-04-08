@@ -4,6 +4,7 @@ import AppKit
 
 final class DatabaseManager: Sendable {
     private let dbQueue: DatabaseQueue
+    private nonisolated(unsafe) let iconCache = NSCache<NSString, NSImage>()
 
     init() throws {
         let appSupport = FileManager.default.urls(
@@ -120,9 +121,14 @@ final class DatabaseManager: Sendable {
     // MARK: - Helpers
 
     private func appIcon(for bundleID: String?) -> NSImage? {
-        guard let bundleID,
-              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
-        else { return nil }
-        return NSWorkspace.shared.icon(forFile: url.path)
+        guard let bundleID else { return nil }
+        let key = bundleID as NSString
+        if let cached = iconCache.object(forKey: key) {
+            return cached
+        }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        iconCache.setObject(icon, forKey: key)
+        return icon
     }
 }

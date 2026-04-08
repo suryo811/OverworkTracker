@@ -36,10 +36,15 @@ final class DashboardViewModel {
 
         isAccessibilityGranted = PermissionsManager.isAccessibilityGranted
 
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             self?.refresh()
         }
         refresh()
+    }
+
+    deinit {
+        refreshTimer?.invalidate()
+        tracker?.stop()
     }
 
     func refresh() {

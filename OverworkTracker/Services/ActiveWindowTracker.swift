@@ -23,7 +23,7 @@ final class ActiveWindowTracker {
         guard !isTracking else { return }
         isTracking = true
 
-        let t = Timer(timeInterval: 5.0, repeats: true) { [weak self] _ in
+        let t = Timer(timeInterval: 30.0, repeats: true) { [weak self] _ in
             self?.tick()
         }
         RunLoop.main.add(t, forMode: .common)
@@ -69,7 +69,7 @@ final class ActiveWindowTracker {
 
         if let sessionID = currentSessionID, sameApp {
             // Extend current session, update window title in place
-            accumulatedDuration += 5.0
+            accumulatedDuration += 30.0
             currentWindowTitle = windowTitle
             let endTime = Date()
             try? db.updateSessionDuration(
