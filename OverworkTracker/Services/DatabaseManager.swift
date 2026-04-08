@@ -67,8 +67,9 @@ final class DatabaseManager: Sendable {
 
     // MARK: - Read Operations
 
-    func fetchTodaySummaries() throws -> [AppUsageSummary] {
-        let todayStart = Calendar.current.startOfDay(for: Date())
+    func fetchSummaries(for date: Date) throws -> [AppUsageSummary] {
+        let dayStart = Calendar.current.startOfDay(for: date)
+        let dayEnd = Calendar.current.date(byAdding: .day, value: 1, to: dayStart)!
 
         let rows = try dbQueue.read { db in
             try Row.fetchAll(
@@ -76,11 +77,11 @@ final class DatabaseManager: Sendable {
                 sql: """
                     SELECT appName, bundleID, SUM(duration) as totalDuration
                     FROM tracking_session
-                    WHERE startTime >= ?
+                    WHERE startTime >= ? AND startTime < ?
                     GROUP BY COALESCE(bundleID, appName)
                     ORDER BY totalDuration DESC
                     """,
-                arguments: [todayStart]
+                arguments: [dayStart, dayEnd]
             )
         }
 
@@ -101,8 +102,9 @@ final class DatabaseManager: Sendable {
         }
     }
 
-    func fetchTotalHoursToday() throws -> TimeInterval {
-        let todayStart = Calendar.current.startOfDay(for: Date())
+    func fetchTotalTime(for date: Date) throws -> TimeInterval {
+        let dayStart = Calendar.current.startOfDay(for: date)
+        let dayEnd = Calendar.current.date(byAdding: .day, value: 1, to: dayStart)!
 
         return try dbQueue.read { db in
             let total = try Double.fetchOne(
@@ -110,9 +112,9 @@ final class DatabaseManager: Sendable {
                 sql: """
                     SELECT COALESCE(SUM(duration), 0)
                     FROM tracking_session
-                    WHERE startTime >= ?
+                    WHERE startTime >= ? AND startTime < ?
                     """,
-                arguments: [todayStart]
+                arguments: [dayStart, dayEnd]
             )
             return total ?? 0
         }

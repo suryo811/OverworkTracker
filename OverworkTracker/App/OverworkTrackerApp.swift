@@ -12,5 +12,6 @@ struct OverworkTrackerApp: App {
             Label("OverworkTracker", systemImage: "clock.badge.exclamationmark")
         }
         .menuBarExtraStyle(.window)
+
     }
 }

@@ -5,6 +5,7 @@ import Foundation
 @Observable
 final class ActiveWindowTracker {
     private let db: DatabaseManager
+    private let settings = AppSettings.shared
     private var timer: Timer?
     private var currentSessionID: Int64?
     private var currentBundleID: String?
@@ -23,7 +24,8 @@ final class ActiveWindowTracker {
         guard !isTracking else { return }
         isTracking = true
 
-        let t = Timer(timeInterval: 30.0, repeats: true) { [weak self] _ in
+        let interval = settings.pollingInterval
+        let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             self?.tick()
         }
         RunLoop.main.add(t, forMode: .common)
@@ -41,9 +43,8 @@ final class ActiveWindowTracker {
 
     private func tick() {
         // 1. Check idle
-        if IdleDetector.isIdle() {
+        if IdleDetector.isIdle(threshold: settings.idleThreshold) {
             if !wasIdle {
-                // Transition to idle: finalize current session
                 finalizeCurrentSession()
                 wasIdle = true
             }
@@ -61,15 +62,22 @@ final class ActiveWindowTracker {
         let appName = frontApp.localizedName ?? "Unknown"
         let bundleID = frontApp.bundleIdentifier
 
-        // 3. Get window title (if accessibility granted)
+        // 3. Skip excluded apps
+        if let bundleID, settings.excludedBundleIDs.contains(bundleID) {
+            if currentSessionID != nil {
+                finalizeCurrentSession()
+            }
+            return
+        }
+
+        // 4. Get window title (if accessibility granted)
         let windowTitle = Self.windowTitle(for: frontApp.processIdentifier)
 
-        // 4. Compare with current session — session boundary is app change only
+        // 5. Compare with current session — session boundary is app change only
         let sameApp = bundleID == currentBundleID
 
         if let sessionID = currentSessionID, sameApp {
-            // Extend current session, update window title in place
-            accumulatedDuration += 30.0
+            accumulatedDuration += settings.pollingInterval
             currentWindowTitle = windowTitle
             let endTime = Date()
             try? db.updateSessionDuration(
@@ -78,7 +86,6 @@ final class ActiveWindowTracker {
                 endTime: endTime
             )
         } else {
-            // App changed — start a new session
             finalizeCurrentSession()
             startNewSession(appName: appName, bundleID: bundleID, windowTitle: windowTitle)
         }
