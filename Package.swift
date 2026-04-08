@@ -17,6 +17,7 @@ let package = Package(
                 .product(name: "GRDB", package: "GRDB.swift")
             ],
             path: "OverworkTracker",
+            exclude: ["App/Info.plist"],
             resources: [],
             linkerSettings: [
                 .unsafeFlags(["-framework", "Cocoa"]),

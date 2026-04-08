@@ -8,7 +8,9 @@ struct DashboardView: View {
             HStack {
                 Button(action: viewModel.goToPreviousDay) {
                     Image(systemName: "chevron.left")
-                        .font(.caption.weight(.semibold))
+                        .font(.body.weight(.semibold))
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
@@ -22,7 +24,9 @@ struct DashboardView: View {
 
                 Button(action: viewModel.goToNextDay) {
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
+                        .font(.body.weight(.semibold))
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(viewModel.isToday)
@@ -80,17 +84,18 @@ struct DashboardView: View {
                 }
             }
 
-            Divider()
-
-            // Verdict banner
-            VerdictBanner(totalHours: viewModel.totalHours)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
+            // Verdict banner (only when >= 1 hour)
+            if viewModel.totalHours >= 1 {
+                Divider()
+                VerdictBanner(totalHours: viewModel.totalHours)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+            }
 
             Divider()
 
             // Toolbar
-            HStack(spacing: 16) {
+            HStack {
                 Button(action: viewModel.togglePause) {
                     Label(
                         viewModel.isPaused ? "Resume" : "Pause",
@@ -103,14 +108,14 @@ struct DashboardView: View {
 
                 Spacer()
 
-                Button {
-                    SettingsWindowManager.shared.open()
-                } label: {
-                    Label("Settings", systemImage: "gear")
+                Button(action: viewModel.exportCSV) {
+                    Image(systemName: "square.and.arrow.up")
                         .font(.caption)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
+                .help("Export as CSV")
+
             }
             .padding(.horizontal)
             .padding(.vertical, 8)

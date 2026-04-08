@@ -16,29 +16,33 @@ struct AppBreakdownRow: View {
                 Image(nsImage: icon)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 22, height: 22)
+                    .frame(width: 24, height: 24)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
             } else {
                 Image(systemName: "app.fill")
                     .font(.system(size: 18))
                     .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
+                    .frame(width: 24, height: 24)
             }
 
             // App name and bar
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(summary.appName)
                     .font(.subheadline)
                     .lineLimit(1)
 
                 GeometryReader { geo in
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(barColor.opacity(0.75))
-                        .frame(width: max(geo.size.width * barFraction, 4))
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.secondary.opacity(0.15))
+                            .frame(maxWidth: .infinity)
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(barColor.opacity(0.8))
+                            .frame(width: max(geo.size.width * barFraction, 4))
+                    }
                 }
-                .frame(height: 6)
+                .frame(height: 5)
             }
-
-            Spacer()
 
             // Duration
             Text(summary.formattedDuration)
@@ -46,6 +50,7 @@ struct AppBreakdownRow: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
+        .help(summary.windowTitles.isEmpty ? "" : summary.windowTitles.joined(separator: "\n"))
     }
 
     private var barColor: Color {

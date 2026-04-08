@@ -3,6 +3,19 @@ import SwiftUI
 struct VerdictBanner: View {
     let totalHours: Double
 
+    private var tier: Int {
+        switch totalHours {
+        case ..<1:    return 0
+        case 1..<2:   return 1
+        case 2..<4:   return 2
+        case 4..<6:   return 3
+        case 6..<8:   return 4
+        case 8..<10:  return 5
+        case 10..<12: return 6
+        default:      return 7
+        }
+    }
+
     private var verdict: (title: String, subtitle: String, symbol: String, color: Color) {
         switch totalHours {
         case ..<1:
@@ -30,14 +43,17 @@ struct VerdictBanner: View {
                 .font(.title2)
                 .foregroundStyle(verdict.color)
                 .frame(width: 28)
+                .animation(.easeInOut(duration: 0.4), value: tier)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(verdict.title)
                     .font(.subheadline.weight(.semibold))
+                    .animation(.easeInOut(duration: 0.4), value: tier)
                 Text(verdict.subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                    .animation(.easeInOut(duration: 0.4), value: tier)
             }
 
             Spacer()

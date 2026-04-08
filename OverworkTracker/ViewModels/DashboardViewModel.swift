@@ -110,4 +110,27 @@ final class DashboardViewModel {
     func requestAccessibility() {
         PermissionsManager.requestAccessibility()
     }
+
+    func exportCSV() {
+        var lines = ["App,Bundle ID,Duration (seconds),Formatted Duration"]
+        for s in appSummaries {
+            let bundleID = s.bundleID ?? ""
+            let name = s.appName.replacingOccurrences(of: ",", with: ";")
+            lines.append("\(name),\(bundleID),\(Int(s.totalDuration)),\(s.formattedDuration)")
+        }
+        let csv = lines.joined(separator: "\n")
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dateString = formatter.string(from: selectedDate)
+        let fileName = "OverworkTracker_\(dateString).csv"
+
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        do {
+            try csv.write(to: url, atomically: true, encoding: .utf8)
+            NSWorkspace.shared.open(url)
+        } catch {
+            print("Export failed: \(error)")
+        }
+    }
 }
