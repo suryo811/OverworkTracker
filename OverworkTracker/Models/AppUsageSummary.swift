@@ -16,13 +16,12 @@ struct AppUsageSummary: Identifiable {
     static func format(_ duration: TimeInterval) -> String {
         let hours = Int(duration) / 3600
         let minutes = (Int(duration) % 3600) / 60
-        let seconds = Int(duration) % 60
         if hours > 0 {
             return "\(hours)h \(minutes)m"
         }
         if minutes > 0 {
-            return "\(minutes)m \(seconds)s"
+            return "\(minutes)m"
         }
-        return "\(seconds)s"
+        return "< 1m"
     }
 }

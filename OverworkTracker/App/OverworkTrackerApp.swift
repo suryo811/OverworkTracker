@@ -9,7 +9,7 @@ struct OverworkTrackerApp: App {
             DashboardView(viewModel: viewModel)
                 .frame(width: 360, height: 460)
         } label: {
-            Label("OverworkTracker", systemImage: "clock.badge.exclamationmark")
+            Label("OverworkTracker", systemImage: "flame.fill")
         }
         .menuBarExtraStyle(.window)
 
