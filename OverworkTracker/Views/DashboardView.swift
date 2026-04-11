@@ -116,6 +116,14 @@ struct DashboardView: View {
                 .foregroundStyle(.secondary)
                 .help("Export as CSV")
 
+                Button(action: { NSApplication.shared.terminate(nil) }) {
+                    Image(systemName: "power")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Quit OverworkTracker")
+
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
