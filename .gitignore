@@ -24,3 +24,6 @@ Package.resolved
 *.sublime-project
 *.sublime-workspace
 .vscode/
+
+
+CLAUDE.md

@@ -6,6 +6,8 @@ final class DashboardViewModel {
     private(set) var appSummaries: [AppUsageSummary] = []
     private(set) var totalSeconds: TimeInterval = 0
     private(set) var isAccessibilityGranted = false
+    var showMonthlySummary = false
+    private(set) var monthlySummary: MonthlySummary?
 
     var selectedDate: Date = Date() {
         didSet { refresh() }
@@ -85,6 +87,15 @@ final class DashboardViewModel {
         }
     }
 
+    func loadMonthlySummary() {
+        guard let db else { return }
+        do {
+            monthlySummary = try db.fetchMonthlySummary()
+        } catch {
+            print("Failed to load monthly summary: \(error)")
+        }
+    }
+
     func togglePause() {
         settings.isPaused.toggle()
         if settings.isPaused {
@@ -112,21 +123,32 @@ final class DashboardViewModel {
     }
 
     func exportCSV() {
-        var lines = ["App,Bundle ID,Duration (seconds),Formatted Duration"]
-        for s in appSummaries {
-            let bundleID = s.bundleID ?? ""
-            let name = s.appName.replacingOccurrences(of: ",", with: ";")
-            lines.append("\(name),\(bundleID),\(Int(s.totalDuration)),\(s.formattedDuration)")
-        }
-        let csv = lines.joined(separator: "\n")
+        guard let db else { return }
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let dateString = formatter.string(from: selectedDate)
-        let fileName = "OverworkTracker_\(dateString).csv"
+        let endDate = Date()
+        let startDate = Calendar.current.date(byAdding: .day, value: -30, to: endDate)!
 
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         do {
+            let summaries = try db.fetchDailySummaries(from: startDate, to: endDate)
+
+            var lines = ["Date,App,Bundle ID,Duration (seconds),Formatted Duration"]
+            for s in summaries {
+                let name = s.appName.replacingOccurrences(of: ",", with: ";")
+                let bundleID = s.bundleID ?? ""
+                let hours = Int(s.totalDuration) / 3600
+                let minutes = (Int(s.totalDuration) % 3600) / 60
+                let formatted = hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
+                lines.append("\(s.date),\(name),\(bundleID),\(Int(s.totalDuration)),\(formatted)")
+            }
+            let csv = lines.joined(separator: "\n")
+
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            let startStr = formatter.string(from: startDate)
+            let endStr = formatter.string(from: endDate)
+            let fileName = "OverworkTracker_\(startStr)_to_\(endStr).csv"
+
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
             try csv.write(to: url, atomically: true, encoding: .utf8)
             NSWorkspace.shared.open(url)
         } catch {

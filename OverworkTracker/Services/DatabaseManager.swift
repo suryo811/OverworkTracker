@@ -124,6 +124,106 @@ final class DatabaseManager: Sendable {
         }
     }
 
+    func fetchDailySummaries(from startDate: Date, to endDate: Date) throws -> [(date: String, appName: String, bundleID: String?, totalDuration: TimeInterval)] {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: startDate)
+        let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: endDate))!
+
+        let rows = try dbQueue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT appName, bundleID, startTime, duration
+                    FROM tracking_session
+                    WHERE startTime >= ? AND startTime < ?
+                    ORDER BY startTime DESC
+                    """,
+                arguments: [start, end]
+            )
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        // Group by (day, app) in Swift
+        var grouped: [String: (appName: String, bundleID: String?, totalDuration: TimeInterval)] = [:]
+        for row in rows {
+            let startTime: Date = row["startTime"]
+            let appName: String = row["appName"]
+            let bundleID: String? = row["bundleID"]
+            let duration: TimeInterval = row["duration"]
+            let day = formatter.string(from: startTime)
+            let key = "\(day)|\(bundleID ?? appName)"
+            if var existing = grouped[key] {
+                existing.totalDuration += duration
+                grouped[key] = existing
+            } else {
+                grouped[key] = (appName: appName, bundleID: bundleID, totalDuration: duration)
+            }
+        }
+
+        return grouped.map { (key, value) in
+            let day = String(key.prefix(10))
+            return (date: day, appName: value.appName, bundleID: value.bundleID, totalDuration: value.totalDuration)
+        }.sorted { ($0.date, $1.totalDuration) > ($1.date, $0.totalDuration) }
+    }
+
+    func fetchMonthlySummary(days: Int = 30) throws -> MonthlySummary {
+        let calendar = Calendar.current
+        let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))!
+        let start = calendar.date(byAdding: .day, value: -days, to: calendar.startOfDay(for: Date()))!
+
+        let rows = try dbQueue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT appName, bundleID, SUM(duration) as totalDuration
+                    FROM tracking_session
+                    WHERE startTime >= ? AND startTime < ?
+                    GROUP BY COALESCE(bundleID, appName)
+                    ORDER BY totalDuration DESC
+                    """,
+                arguments: [start, end]
+            )
+        }
+
+        let totalSeconds = rows.reduce(0.0) { $0 + ($1["totalDuration"] as TimeInterval) }
+
+        // Count distinct active days by fetching startTimes and grouping in Swift
+        let startTimes: [Date] = try dbQueue.read { db in
+            try Date.fetchAll(
+                db,
+                sql: """
+                    SELECT DISTINCT startTime FROM tracking_session
+                    WHERE startTime >= ? AND startTime < ?
+                    """,
+                arguments: [start, end]
+            )
+        }
+        let activeDays = Set(startTimes.map { calendar.startOfDay(for: $0) }).count
+
+        let topApps: [(appName: String, bundleID: String?, totalDuration: TimeInterval)] = rows.prefix(5).map { row in
+            (
+                appName: row["appName"] as String,
+                bundleID: row["bundleID"] as String?,
+                totalDuration: row["totalDuration"] as TimeInterval
+            )
+        }
+
+        return MonthlySummary(
+            totalSeconds: totalSeconds,
+            activeDays: max(activeDays, 1),
+            topApps: topApps.map { app in
+                MonthlySummary.AppEntry(
+                    appName: app.appName,
+                    bundleID: app.bundleID,
+                    totalDuration: app.totalDuration,
+                    icon: appIcon(for: app.bundleID)
+                )
+            }
+        )
+    }
+
     // MARK: - Helpers
 
     private func appIcon(for bundleID: String?) -> NSImage? {
