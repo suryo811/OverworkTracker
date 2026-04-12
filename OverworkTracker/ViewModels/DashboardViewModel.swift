@@ -17,6 +17,7 @@ final class DashboardViewModel {
     private var db: DatabaseManager?
     private var tracker: ActiveWindowTracker?
     private var refreshTimer: Timer?
+    private var accessibilityPollTimer: Timer?
 
     var totalHours: Double {
         totalSeconds / 3600.0
@@ -73,6 +74,7 @@ final class DashboardViewModel {
 
     deinit {
         refreshTimer?.invalidate()
+        accessibilityPollTimer?.invalidate()
         tracker?.stop()
     }
 
@@ -120,6 +122,19 @@ final class DashboardViewModel {
 
     func requestAccessibility() {
         PermissionsManager.requestAccessibility()
+        startAccessibilityPolling()
+    }
+
+    private func startAccessibilityPolling() {
+        accessibilityPollTimer?.invalidate()
+        accessibilityPollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            if PermissionsManager.isAccessibilityGranted {
+                self.isAccessibilityGranted = true
+                timer.invalidate()
+                self.accessibilityPollTimer = nil
+            }
+        }
     }
 
     func exportCSV() {
