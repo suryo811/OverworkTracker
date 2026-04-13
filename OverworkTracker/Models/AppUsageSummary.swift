@@ -7,7 +7,6 @@ struct AppUsageSummary: Identifiable {
     let bundleID: String?
     let totalDuration: TimeInterval
     let icon: NSImage?
-    let windowTitles: [String]
 
     var formattedDuration: String {
         Self.format(totalDuration)

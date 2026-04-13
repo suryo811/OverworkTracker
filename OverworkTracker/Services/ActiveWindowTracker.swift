@@ -1,5 +1,4 @@
 import AppKit
-import ApplicationServices
 import Foundation
 
 @Observable
@@ -9,7 +8,6 @@ final class ActiveWindowTracker {
     private var timer: Timer?
     private var currentSessionID: Int64?
     private var currentBundleID: String?
-    private var currentWindowTitle: String?
     private var currentSessionStart: Date?
     private var accumulatedDuration: TimeInterval = 0
     private var wasIdle = false
@@ -70,15 +68,11 @@ final class ActiveWindowTracker {
             return
         }
 
-        // 4. Get window title (if accessibility granted)
-        let windowTitle = Self.windowTitle(for: frontApp.processIdentifier)
-
-        // 5. Compare with current session — session boundary is app change only
+        // 4. Compare with current session — session boundary is app change only
         let sameApp = bundleID == currentBundleID
 
         if let sessionID = currentSessionID, sameApp {
             accumulatedDuration += settings.pollingInterval
-            currentWindowTitle = windowTitle
             let endTime = Date()
             try? db.updateSessionDuration(
                 id: sessionID,
@@ -87,18 +81,18 @@ final class ActiveWindowTracker {
             )
         } else {
             finalizeCurrentSession()
-            startNewSession(appName: appName, bundleID: bundleID, windowTitle: windowTitle)
+            startNewSession(appName: appName, bundleID: bundleID)
         }
     }
 
     // MARK: - Session Management
 
-    private func startNewSession(appName: String, bundleID: String?, windowTitle: String?) {
+    private func startNewSession(appName: String, bundleID: String?) {
         let now = Date()
-        var session = TrackingSession(
+        let session = TrackingSession(
             appName: appName,
             bundleID: bundleID,
-            windowTitle: windowTitle,
+            windowTitle: nil,
             startTime: now,
             duration: 0,
             endTime: now
@@ -107,7 +101,6 @@ final class ActiveWindowTracker {
         do {
             currentSessionID = try db.insertSession(session)
             currentBundleID = bundleID
-            currentWindowTitle = windowTitle
             currentSessionStart = now
             accumulatedDuration = 0
         } catch {
@@ -118,33 +111,7 @@ final class ActiveWindowTracker {
     private func finalizeCurrentSession() {
         currentSessionID = nil
         currentBundleID = nil
-        currentWindowTitle = nil
         currentSessionStart = nil
         accumulatedDuration = 0
-    }
-
-    // MARK: - Window Title via Accessibility
-
-    private static func windowTitle(for pid: pid_t) -> String? {
-        guard PermissionsManager.isAccessibilityGranted else { return nil }
-
-        let axApp = AXUIElementCreateApplication(pid)
-        var focusedWindow: CFTypeRef?
-
-        let result = AXUIElementCopyAttributeValue(
-            axApp,
-            kAXFocusedWindowAttribute as CFString,
-            &focusedWindow
-        )
-        guard result == .success else { return nil }
-
-        var titleRef: CFTypeRef?
-        let titleResult = AXUIElementCopyAttributeValue(
-            focusedWindow as! AXUIElement,
-            kAXTitleAttribute as CFString,
-            &titleRef
-        )
-        guard titleResult == .success, let title = titleRef as? String else { return nil }
-        return title
     }
 }

@@ -75,8 +75,7 @@ final class DatabaseManager: Sendable {
             try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT appName, bundleID, SUM(duration) as totalDuration,
-                           GROUP_CONCAT(DISTINCT windowTitle) as windowTitles
+                    SELECT appName, bundleID, SUM(duration) as totalDuration
                     FROM tracking_session
                     WHERE startTime >= ? AND startTime < ?
                     GROUP BY COALESCE(bundleID, appName)
@@ -90,9 +89,6 @@ final class DatabaseManager: Sendable {
             let bundleID: String? = row["bundleID"]
             let appName: String = row["appName"]
             let totalDuration: TimeInterval = row["totalDuration"]
-            let windowTitles: [String] = (row["windowTitles"] as String?)
-                .map { $0.split(separator: ",").map(String.init) } ?? []
-
             let icon = appIcon(for: bundleID)
 
             return AppUsageSummary(
@@ -100,8 +96,7 @@ final class DatabaseManager: Sendable {
                 appName: appName,
                 bundleID: bundleID,
                 totalDuration: totalDuration,
-                icon: icon,
-                windowTitles: windowTitles
+                icon: icon
             )
         }
     }

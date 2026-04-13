@@ -5,7 +5,6 @@ import Foundation
 final class DashboardViewModel {
     private(set) var appSummaries: [AppUsageSummary] = []
     private(set) var totalSeconds: TimeInterval = 0
-    private(set) var isAccessibilityGranted = false
     var showMonthlySummary = false
     private(set) var monthlySummary: MonthlySummary?
 
@@ -17,11 +16,6 @@ final class DashboardViewModel {
     private var db: DatabaseManager?
     private var tracker: ActiveWindowTracker?
     private var refreshTimer: Timer?
-    private var accessibilityPollTimer: Timer?
-
-    var totalHours: Double {
-        totalSeconds / 3600.0
-    }
 
     var formattedTotal: String {
         AppUsageSummary.format(totalSeconds)
@@ -64,8 +58,6 @@ final class DashboardViewModel {
             print("Failed to initialize database: \(error)")
         }
 
-        isAccessibilityGranted = PermissionsManager.isAccessibilityGranted
-
         refreshTimer = Timer.scheduledTimer(withTimeInterval: settings.pollingInterval, repeats: true) { [weak self] _ in
             self?.refresh()
         }
@@ -74,7 +66,6 @@ final class DashboardViewModel {
 
     deinit {
         refreshTimer?.invalidate()
-        accessibilityPollTimer?.invalidate()
         tracker?.stop()
     }
 
@@ -83,7 +74,6 @@ final class DashboardViewModel {
         do {
             appSummaries = try db.fetchSummaries(for: selectedDate)
             totalSeconds = try db.fetchTotalTime(for: selectedDate)
-            isAccessibilityGranted = PermissionsManager.isAccessibilityGranted
         } catch {
             print("Failed to refresh: \(error)")
         }
@@ -117,23 +107,6 @@ final class DashboardViewModel {
         guard !isToday else { return }
         if let next = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) {
             selectedDate = next
-        }
-    }
-
-    func requestAccessibility() {
-        PermissionsManager.requestAccessibility()
-        startAccessibilityPolling()
-    }
-
-    private func startAccessibilityPolling() {
-        accessibilityPollTimer?.invalidate()
-        accessibilityPollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-            guard let self else { timer.invalidate(); return }
-            if PermissionsManager.isAccessibilityGranted {
-                self.isAccessibilityGranted = true
-                timer.invalidate()
-                self.accessibilityPollTimer = nil
-            }
         }
     }
 

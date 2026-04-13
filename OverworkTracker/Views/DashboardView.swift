@@ -45,14 +45,6 @@ struct DashboardView: View {
 
                 Divider()
 
-                // Accessibility prompt
-                if !viewModel.isAccessibilityGranted {
-                    PermissionPromptView {
-                        viewModel.requestAccessibility()
-                    }
-                    Divider()
-                }
-
                 // App breakdown list
                 if viewModel.appSummaries.isEmpty {
                     Spacer()
@@ -87,14 +79,6 @@ struct DashboardView: View {
 
                 if !viewModel.appSummaries.isEmpty {
                     ColorLegend()
-                }
-
-                // Verdict banner (only when >= 1 hour)
-                if viewModel.totalHours >= 1 {
-                    Divider()
-                    VerdictBanner(totalHours: viewModel.totalHours)
-                        .padding(.horizontal)
-                        .padding(.vertical, 8)
                 }
             } else {
                 // Monthly summary

@@ -4,7 +4,5 @@
 <dict>
     <key>LSUIElement</key>
     <true/>
-    <key>NSAccessibilityUsageDescription</key>
-    <string>OverworkTracker needs Accessibility permission to read window titles and track which app you're using.</string>
 </dict>
 </plist>

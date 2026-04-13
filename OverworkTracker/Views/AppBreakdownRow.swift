@@ -50,7 +50,6 @@ struct AppBreakdownRow: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
-        .help(summary.windowTitles.isEmpty ? "" : summary.windowTitles.joined(separator: "\n"))
     }
 
     private var barColor: Color {
