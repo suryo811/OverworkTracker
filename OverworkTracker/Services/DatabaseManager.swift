@@ -19,6 +19,14 @@ final class DatabaseManager: Sendable {
         try migrate()
     }
 
+    /// Test-only initializer that opens the database at an arbitrary path.
+    /// Lets the test suite use a throwaway temp directory so tests never
+    /// touch the real `~/Library/Application Support` database.
+    init(databasePath: String) throws {
+        dbQueue = try DatabaseQueue(path: databasePath)
+        try migrate()
+    }
+
     private func migrate() throws {
         var migrator = DatabaseMigrator()
 

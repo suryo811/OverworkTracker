@@ -49,7 +49,12 @@ final class DashboardViewModel {
         do {
             let database = try DatabaseManager()
             self.db = database
-            let windowTracker = ActiveWindowTracker(db: database)
+            let windowTracker = ActiveWindowTracker(
+                clock: SystemClock(),
+                activity: NSWorkspaceActivitySource(),
+                store: database,
+                settings: settings
+            )
             self.tracker = windowTracker
             if !settings.isPaused {
                 windowTracker.start()
@@ -58,7 +63,9 @@ final class DashboardViewModel {
             print("Failed to initialize database: \(error)")
         }
 
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: settings.pollingInterval, repeats: true) { [weak self] _ in
+        // UI refresh is decoupled from the tracker's heartbeat — a fixed 2s
+        // cadence keeps the live duration counter feeling real-time.
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.refresh()
         }
         refresh()
@@ -108,6 +115,10 @@ final class DashboardViewModel {
         if let next = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) {
             selectedDate = next
         }
+    }
+
+    func goToToday() {
+        selectedDate = Date()
     }
 
     func exportCSV() {

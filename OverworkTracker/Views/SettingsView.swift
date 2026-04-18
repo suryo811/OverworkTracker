@@ -8,13 +8,13 @@ struct SettingsView: View {
         Form {
             Section("General") {
                 HStack {
-                    Text("Polling interval")
+                    Text("Heartbeat interval")
                     Spacer()
-                    Picker("", selection: $settings.pollingInterval) {
+                    Picker("", selection: $settings.heartbeatInterval) {
+                        Text("1s").tag(1.0 as TimeInterval)
                         Text("5s").tag(5.0 as TimeInterval)
                         Text("15s").tag(15.0 as TimeInterval)
                         Text("30s").tag(30.0 as TimeInterval)
-                        Text("60s").tag(60.0 as TimeInterval)
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 200)

@@ -23,6 +23,11 @@ let package = Package(
                 .unsafeFlags(["-framework", "Cocoa"]),
                 .unsafeFlags(["-framework", "ApplicationServices"])
             ]
+        ),
+        .testTarget(
+            name: "OverworkTrackerTests",
+            dependencies: ["OverworkTracker"],
+            path: "Tests/OverworkTrackerTests"
         )
     ]
 )

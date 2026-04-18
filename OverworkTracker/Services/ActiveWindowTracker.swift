@@ -1,117 +1,237 @@
 import AppKit
 import Foundation
 
+/// Event-driven active-window tracker.
+///
+/// The previous implementation polled every `pollingInterval` seconds and
+/// credited a fixed chunk of `pollingInterval` to whichever app happened to be
+/// frontmost at the tick. That lost every app visit shorter than the polling
+/// interval (a 15s visit recorded as 0s) and it also over-credited idle time
+/// because app switches were only noticed at the next tick.
+///
+/// This implementation:
+///   * subscribes to `NSWorkspace.didActivateApplicationNotification` so app
+///     switches are processed immediately and use real wall-clock elapsed
+///     time;
+///   * subscribes to `willSleepNotification` / `didWakeNotification` so time
+///     the Mac is asleep is never credited;
+///   * still runs a short heartbeat (default 5s) for two purposes only —
+///     detecting idle transitions and pushing the live duration to the DB so
+///     the UI feels real-time.
 @Observable
 final class ActiveWindowTracker {
-    private let db: DatabaseManager
-    private let settings = AppSettings.shared
-    private var timer: Timer?
-    private var currentSessionID: Int64?
-    private var currentBundleID: String?
-    private var currentSessionStart: Date?
-    private var accumulatedDuration: TimeInterval = 0
+    private let clock: Clock
+    private let activity: ActivitySource
+    private let store: SessionStore
+    private let settings: TrackerSettingsProviding
+
+    private var heartbeatTimer: Timer?
+    private var current: LiveSession?
     private var wasIdle = false
 
     private(set) var isTracking = false
 
-    init(db: DatabaseManager) {
-        self.db = db
+    /// Hard cap on a single session's credited duration. Guards against clock
+    /// skew, missed sleep notifications, or other pathological states from
+    /// producing 30-hour sessions.
+    static let maxSessionDuration: TimeInterval = 24 * 60 * 60
+
+    private struct LiveSession {
+        let id: Int64
+        let bundleID: String?
+        let appName: String
+        let startedAt: Date
     }
+
+    init(
+        clock: Clock = SystemClock(),
+        activity: ActivitySource = NSWorkspaceActivitySource(),
+        store: SessionStore,
+        settings: TrackerSettingsProviding = AppSettings.shared
+    ) {
+        self.clock = clock
+        self.activity = activity
+        self.store = store
+        self.settings = settings
+    }
+
+    // MARK: - Lifecycle
 
     func start() {
         guard !isTracking else { return }
         isTracking = true
+        wasIdle = false
 
-        let interval = settings.pollingInterval
-        let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
-            self?.tick()
+        activity.observeAppActivation { [weak self] app in
+            self?.handleAppActivation(app)
         }
-        RunLoop.main.add(t, forMode: .common)
-        timer = t
+        activity.observeSleepWake(
+            willSleep: { [weak self] in self?.handleWillSleep() },
+            didWake: { [weak self] in self?.handleDidWake() }
+        )
+
+        // Seed a session for whatever is currently frontmost, unless the user
+        // is already idle.
+        let now = clock.now()
+        if activity.secondsSinceLastInput >= settings.idleThreshold {
+            wasIdle = true
+        } else if let front = activity.frontmost {
+            startNewSession(for: front, at: now)
+        }
+
+        scheduleHeartbeat()
     }
 
     func stop() {
-        timer?.invalidate()
-        timer = nil
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
+        activity.stopObserving()
+        commitCurrentSession(upTo: clock.now())
         isTracking = false
-        finalizeCurrentSession()
+        wasIdle = false
     }
 
-    // MARK: - Polling
+    private func scheduleHeartbeat() {
+        heartbeatTimer?.invalidate()
+        let t = Timer(timeInterval: settings.heartbeatInterval, repeats: true) { [weak self] _ in
+            self?.heartbeat()
+        }
+        RunLoop.main.add(t, forMode: .common)
+        heartbeatTimer = t
+    }
 
-    private func tick() {
-        // 1. Check idle
-        if IdleDetector.isIdle(threshold: settings.idleThreshold) {
+    // MARK: - Event handlers (also driven directly by tests)
+
+    /// Processes a frontmost-app change. Commits the prior session with the
+    /// exact elapsed time up to `now` and starts a new one.
+    func handleAppActivation(_ app: FrontmostApp) {
+        guard isTracking else { return }
+        let now = clock.now()
+        commitCurrentSession(upTo: now)
+        wasIdle = false
+        startNewSession(for: app, at: now)
+    }
+
+    func handleWillSleep() {
+        guard isTracking else { return }
+        commitCurrentSession(upTo: clock.now())
+        wasIdle = true
+    }
+
+    func handleDidWake() {
+        guard isTracking else { return }
+        // On wake the user may or may not be actively using the machine; let
+        // the next heartbeat decide based on `secondsSinceLastInput`. Starting
+        // a session here would over-credit anyone who wakes the Mac and walks
+        // away.
+        wasIdle = activity.secondsSinceLastInput >= settings.idleThreshold
+        if !wasIdle, let front = activity.frontmost {
+            startNewSession(for: front, at: clock.now())
+        }
+    }
+
+    /// Called on every heartbeat (production timer) or directly from tests.
+    /// Responsible for (1) idle detection and (2) pushing the live duration
+    /// to storage so the UI updates while an app is still in the foreground.
+    func heartbeat() {
+        guard isTracking else { return }
+
+        let now = clock.now()
+        let secondsSinceInput = activity.secondsSinceLastInput
+        let isIdle = secondsSinceInput >= settings.idleThreshold
+
+        if isIdle {
             if !wasIdle {
-                finalizeCurrentSession()
+                // User stopped interacting `secondsSinceInput` ago — credit up
+                // to that moment, not up to `now`. This fixes the old bug
+                // where idle time up to `idleThreshold` was silently added.
+                let stoppedAt = now.addingTimeInterval(-secondsSinceInput)
+                commitCurrentSession(upTo: stoppedAt)
                 wasIdle = true
             }
             return
         }
 
-        // Came back from idle
+        // Coming back from idle.
         if wasIdle {
             wasIdle = false
-            currentSessionID = nil
-        }
-
-        // 2. Get frontmost app
-        guard let frontApp = NSWorkspace.shared.frontmostApplication else { return }
-        let appName = frontApp.localizedName ?? "Unknown"
-        let bundleID = frontApp.bundleIdentifier
-
-        // 3. Skip excluded apps
-        if let bundleID, settings.excludedBundleIDs.contains(bundleID) {
-            if currentSessionID != nil {
-                finalizeCurrentSession()
+            if let front = activity.frontmost {
+                startNewSession(for: front, at: now)
             }
             return
         }
 
-        // 4. Compare with current session — session boundary is app change only
-        let sameApp = bundleID == currentBundleID
-
-        if let sessionID = currentSessionID, sameApp {
-            accumulatedDuration += settings.pollingInterval
-            let endTime = Date()
-            try? db.updateSessionDuration(
-                id: sessionID,
-                duration: accumulatedDuration,
-                endTime: endTime
-            )
-        } else {
-            finalizeCurrentSession()
-            startNewSession(appName: appName, bundleID: bundleID)
+        // Steady-state active: refresh the live duration. If somehow we have
+        // no session but are active (e.g. start() raced with startup), open
+        // one now.
+        if current != nil {
+            refreshCurrentDuration(at: now)
+        } else if let front = activity.frontmost {
+            startNewSession(for: front, at: now)
         }
     }
 
-    // MARK: - Session Management
+    // MARK: - Session management
 
-    private func startNewSession(appName: String, bundleID: String?) {
-        let now = Date()
+    private func startNewSession(for app: FrontmostApp, at startedAt: Date) {
+        // Excluded apps are tracked as "off" — no session created. Any
+        // previous session was already committed by the caller.
+        if let bid = app.bundleID, settings.excludedBundleIDs.contains(bid) {
+            return
+        }
+
         let session = TrackingSession(
-            appName: appName,
-            bundleID: bundleID,
+            appName: app.appName,
+            bundleID: app.bundleID,
             windowTitle: nil,
-            startTime: now,
+            startTime: startedAt,
             duration: 0,
-            endTime: now
+            endTime: startedAt
         )
 
         do {
-            currentSessionID = try db.insertSession(session)
-            currentBundleID = bundleID
-            currentSessionStart = now
-            accumulatedDuration = 0
+            let id = try store.insertSession(session)
+            current = LiveSession(
+                id: id,
+                bundleID: app.bundleID,
+                appName: app.appName,
+                startedAt: startedAt
+            )
         } catch {
             print("Failed to insert session: \(error)")
+            current = nil
         }
     }
 
-    private func finalizeCurrentSession() {
-        currentSessionID = nil
-        currentBundleID = nil
-        currentSessionStart = nil
-        accumulatedDuration = 0
+    private func commitCurrentSession(upTo endTime: Date) {
+        guard let session = current else { return }
+        let raw = endTime.timeIntervalSince(session.startedAt)
+        let duration = max(0, min(raw, Self.maxSessionDuration))
+        let clampedEnd = session.startedAt.addingTimeInterval(duration)
+        do {
+            try store.updateSessionDuration(
+                id: session.id,
+                duration: duration,
+                endTime: clampedEnd
+            )
+        } catch {
+            print("Failed to commit session: \(error)")
+        }
+        current = nil
+    }
+
+    private func refreshCurrentDuration(at now: Date) {
+        guard let session = current else { return }
+        let raw = now.timeIntervalSince(session.startedAt)
+        let duration = max(0, min(raw, Self.maxSessionDuration))
+        do {
+            try store.updateSessionDuration(
+                id: session.id,
+                duration: duration,
+                endTime: now
+            )
+        } catch {
+            print("Failed to refresh session: \(error)")
+        }
     }
 }

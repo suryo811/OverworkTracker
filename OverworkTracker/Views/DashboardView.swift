@@ -17,9 +17,25 @@ struct DashboardView: View {
 
                     Spacer()
 
-                    Text(viewModel.dateLabel)
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
+                    Group {
+                        if viewModel.isToday {
+                            Text(viewModel.dateLabel)
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Button(action: viewModel.goToToday) {
+                                HStack(spacing: 4) {
+                                    Text(viewModel.dateLabel)
+                                        .font(.headline)
+                                    Image(systemName: "arrow.uturn.left.circle.fill")
+                                        .font(.caption)
+                                }
+                                .foregroundStyle(Color.accentColor)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Jump to today")
+                        }
+                    }
 
                     Spacer()
 
