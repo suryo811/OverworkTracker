@@ -29,9 +29,10 @@ struct SettingsView: View {
                         Text("5 min").tag(300.0 as TimeInterval)
                         Text("10 min").tag(600.0 as TimeInterval)
                         Text("15 min").tag(900.0 as TimeInterval)
+                        Text("Never").tag(TimeInterval.infinity)
                     }
                     .pickerStyle(.menu)
-                    .frame(width: 100)
+                    .frame(width: 110)
                 }
 
                 Toggle("Launch at login", isOn: $settings.launchAtLogin)

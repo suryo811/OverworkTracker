@@ -44,11 +44,20 @@ final class AppSettingsTests: XCTestCase {
                        "Stored idleThreshold below 60s must clamp to 60s")
     }
 
-    func testIdleThresholdClampedHighOnLoad() {
+    func testIdleThresholdAllowsInfinityForNeverIdle() {
+        defaults.set(TimeInterval.infinity, forKey: "idleThreshold")
+        let settings = AppSettings(defaults: defaults)
+        XCTAssertEqual(settings.idleThreshold, TimeInterval.infinity,
+                       "Stored idleThreshold of .infinity (the Never sentinel) must survive load without being clamped")
+    }
+
+    func testIdleThresholdPreservesLargeFiniteValuesOnLoad() {
+        // The upper bound was previously 900s; widening it so Never can round-trip also
+        // means any large value the user picks stays intact rather than snapping to 900.
         defaults.set(10_000.0, forKey: "idleThreshold")
         let settings = AppSettings(defaults: defaults)
-        XCTAssertEqual(settings.idleThreshold, 900.0, accuracy: 0.001,
-                       "Stored idleThreshold above 900s must clamp to 900s")
+        XCTAssertEqual(settings.idleThreshold, 10_000.0, accuracy: 0.001,
+                       "Stored idleThreshold above the old 900s cap must no longer be clamped down")
     }
 
     func testDefaultsWhenNothingStored() {
@@ -119,5 +128,14 @@ final class AppSettingsTests: XCTestCase {
         let b = AppSettings(defaults: defaults)
         XCTAssertEqual(b.heartbeatInterval, 7, accuracy: 0.001)
         XCTAssertEqual(b.idleThreshold, 120, accuracy: 0.001)
+    }
+
+    func testIdleThresholdPersistsInfinityAcrossInstances() {
+        let a = AppSettings(defaults: defaults)
+        a.idleThreshold = .infinity
+
+        let b = AppSettings(defaults: defaults)
+        XCTAssertEqual(b.idleThreshold, .infinity,
+                       "Never idle (.infinity) must round-trip through UserDefaults so the user's choice sticks across launches")
     }
 }

@@ -64,7 +64,7 @@ final class AppSettings {
         }
 
         let storedIdle = defaults.double(forKey: "idleThreshold")
-        self.idleThreshold = storedIdle == 0 ? 300 : storedIdle.clamped(to: 60...900)
+        self.idleThreshold = storedIdle == 0 ? 300 : storedIdle.clamped(to: 60...TimeInterval.infinity)
 
         self.launchAtLogin = defaults.bool(forKey: "launchAtLogin")
         self.excludedBundleIDs = Set(defaults.stringArray(forKey: "excludedBundleIDs") ?? [])
