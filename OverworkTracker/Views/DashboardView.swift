@@ -55,7 +55,7 @@ struct DashboardView: View {
 
                 // Total time
                 Text(viewModel.formattedTotal)
-                    .font(.system(.title, design: .rounded, weight: .semibold))
+                    .font(.system(.title, design: .rounded, weight: .medium))
                     .monospacedDigit()
                     .padding(.bottom, 8)
 
@@ -63,7 +63,6 @@ struct DashboardView: View {
 
                 // App breakdown list
                 if viewModel.appSummaries.isEmpty {
-                    Spacer()
                     VStack(spacing: 8) {
                         Image(systemName: "clock")
                             .font(.system(size: 32))
@@ -77,37 +76,32 @@ struct DashboardView: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                    Spacer()
+                    .frame(height: 140)
                 } else {
+                    let rowHeight: CGFloat = 32
+                    let maxListHeight: CGFloat = 360
+                    let listHeight = min(CGFloat(viewModel.appSummaries.count) * rowHeight + 16, maxListHeight)
                     ScrollView {
-                        LazyVStack(spacing: 6) {
+                        LazyVStack(spacing: 2) {
                             ForEach(viewModel.appSummaries) { summary in
-                                AppBreakdownRow(
-                                    summary: summary,
-                                    maxDuration: viewModel.maxDuration
-                                )
+                                AppBreakdownRow(summary: summary)
                             }
                         }
                         .padding(.horizontal)
                         .padding(.vertical, 8)
                     }
-                }
-
-                if !viewModel.appSummaries.isEmpty {
-                    ColorLegend()
+                    .frame(height: listHeight)
                 }
             } else {
                 // Monthly summary
                 if let summary = viewModel.monthlySummary {
                     MonthlySummaryView(summary: summary)
+                        .frame(height: 360)
                 } else {
-                    Spacer()
                     ProgressView()
-                    Spacer()
+                        .frame(height: 360)
                 }
             }
-
-            Divider()
 
             // Toolbar
             HStack {
@@ -121,7 +115,7 @@ struct DashboardView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(viewModel.isPaused ? .orange : .secondary)
+                .foregroundStyle(viewModel.isPaused ? Color.accentColor : .secondary)
 
                 Spacer()
 
@@ -163,7 +157,8 @@ struct DashboardView: View {
 
             }
             .padding(.horizontal)
-            .padding(.vertical, 4)
+            .padding(.top, 4)
+            .padding(.bottom, 4)
         }
         .background(.ultraThinMaterial)
     }

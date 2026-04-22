@@ -12,7 +12,7 @@ final class DashboardViewModel {
         didSet { refresh() }
     }
 
-    private let settings = AppSettings.shared
+    private let settings: AppSettings
     private var db: DatabaseManager?
     private var tracker: ActiveWindowTracker?
     private var refreshTimer: Timer?
@@ -45,30 +45,50 @@ final class DashboardViewModel {
         settings.isPaused
     }
 
-    init() {
+    /// Designated initializer. Accepts collaborators so tests can wire a
+    /// temp-path database, a fake-backed tracker, and an isolated settings
+    /// instance. The convenience `init()` wires up real production defaults.
+    init(
+        database: DatabaseManager?,
+        tracker: ActiveWindowTracker?,
+        settings: AppSettings,
+        startRefreshTimer: Bool = true
+    ) {
+        self.db = database
+        self.tracker = tracker
+        self.settings = settings
+
+        if let tracker, !settings.isPaused {
+            tracker.start()
+        }
+
+        if startRefreshTimer {
+            // UI refresh is decoupled from the tracker's heartbeat — a fixed 2s
+            // cadence keeps the live duration counter feeling real-time.
+            refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+                self?.refresh()
+            }
+        }
+        refresh()
+    }
+
+    convenience init() {
+        let settings = AppSettings.shared
+        var database: DatabaseManager?
+        var tracker: ActiveWindowTracker?
         do {
-            let database = try DatabaseManager()
-            self.db = database
-            let windowTracker = ActiveWindowTracker(
+            let openedDB = try DatabaseManager()
+            database = openedDB
+            tracker = ActiveWindowTracker(
                 clock: SystemClock(),
                 activity: NSWorkspaceActivitySource(),
-                store: database,
+                store: openedDB,
                 settings: settings
             )
-            self.tracker = windowTracker
-            if !settings.isPaused {
-                windowTracker.start()
-            }
         } catch {
             print("Failed to initialize database: \(error)")
         }
-
-        // UI refresh is decoupled from the tracker's heartbeat — a fixed 2s
-        // cadence keeps the live duration counter feeling real-time.
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.refresh()
-        }
-        refresh()
+        self.init(database: database, tracker: tracker, settings: settings)
     }
 
     deinit {
@@ -121,6 +141,24 @@ final class DashboardViewModel {
         selectedDate = Date()
     }
 
+    /// Pure CSV serializer for the daily-summary rows returned by
+    /// `DatabaseManager.fetchDailySummaries`. Extracted so tests can verify
+    /// the output without touching the filesystem or `NSWorkspace`.
+    static func makeCSV(
+        rows: [(date: String, appName: String, bundleID: String?, totalDuration: TimeInterval)]
+    ) -> String {
+        var lines = ["Date,App,Bundle ID,Duration (seconds),Formatted Duration"]
+        for s in rows {
+            let name = s.appName.replacingOccurrences(of: ",", with: ";")
+            let bundleID = s.bundleID ?? ""
+            let hours = Int(s.totalDuration) / 3600
+            let minutes = (Int(s.totalDuration) % 3600) / 60
+            let formatted = hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
+            lines.append("\(s.date),\(name),\(bundleID),\(Int(s.totalDuration)),\(formatted)")
+        }
+        return lines.joined(separator: "\n")
+    }
+
     func exportCSV() {
         guard let db else { return }
 
@@ -129,17 +167,7 @@ final class DashboardViewModel {
 
         do {
             let summaries = try db.fetchDailySummaries(from: startDate, to: endDate)
-
-            var lines = ["Date,App,Bundle ID,Duration (seconds),Formatted Duration"]
-            for s in summaries {
-                let name = s.appName.replacingOccurrences(of: ",", with: ";")
-                let bundleID = s.bundleID ?? ""
-                let hours = Int(s.totalDuration) / 3600
-                let minutes = (Int(s.totalDuration) % 3600) / 60
-                let formatted = hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
-                lines.append("\(s.date),\(name),\(bundleID),\(Int(s.totalDuration)),\(formatted)")
-            }
-            let csv = lines.joined(separator: "\n")
+            let csv = Self.makeCSV(rows: summaries)
 
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"

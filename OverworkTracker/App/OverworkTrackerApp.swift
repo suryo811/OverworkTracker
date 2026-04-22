@@ -7,7 +7,7 @@ struct OverworkTrackerApp: App {
     var body: some Scene {
         MenuBarExtra {
             DashboardView(viewModel: viewModel)
-                .frame(width: 360, height: 460)
+                .frame(width: 280)
         } label: {
             Label("OverworkTracker", systemImage: "flame.fill")
         }

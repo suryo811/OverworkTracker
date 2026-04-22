@@ -5,36 +5,23 @@ import ServiceManagement
 final class AppSettings {
     static let shared = AppSettings()
 
-    // Stored properties — @Observable instruments these for change tracking.
-    // Each uses didSet to persist the new value to UserDefaults.
+    @ObservationIgnored private let defaults: UserDefaults
 
     /// How often the tracker's heartbeat fires. The heartbeat is only used
     /// for idle detection and refreshing the live duration on disk so the
     /// dashboard feels real-time — app switches are event-driven and do not
     /// depend on this interval. Clamped 1–30s; default 5s.
-    var heartbeatInterval: TimeInterval = {
-        // Migrate the old `pollingInterval` key if present so existing users
-        // don't see a stale 30s value.
-        let defaults = UserDefaults.standard
-        let legacy = defaults.double(forKey: "pollingInterval")
-        let stored = defaults.double(forKey: "heartbeatInterval")
-        if stored != 0 { return stored.clamped(to: 1...30) }
-        if legacy != 0 { return min(legacy, 30).clamped(to: 1...30) }
-        return 5
-    }() {
-        didSet { UserDefaults.standard.set(heartbeatInterval, forKey: "heartbeatInterval") }
+    var heartbeatInterval: TimeInterval {
+        didSet { defaults.set(heartbeatInterval, forKey: "heartbeatInterval") }
     }
 
-    var idleThreshold: TimeInterval = {
-        let stored = UserDefaults.standard.double(forKey: "idleThreshold")
-        return stored == 0 ? 300 : stored.clamped(to: 60...900)
-    }() {
-        didSet { UserDefaults.standard.set(idleThreshold, forKey: "idleThreshold") }
+    var idleThreshold: TimeInterval {
+        didSet { defaults.set(idleThreshold, forKey: "idleThreshold") }
     }
 
-    var launchAtLogin: Bool = UserDefaults.standard.bool(forKey: "launchAtLogin") {
+    var launchAtLogin: Bool {
         didSet {
-            UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
+            defaults.set(launchAtLogin, forKey: "launchAtLogin")
             do {
                 if launchAtLogin {
                     try SMAppService.mainApp.register()
@@ -47,12 +34,41 @@ final class AppSettings {
         }
     }
 
-    var excludedBundleIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "excludedBundleIDs") ?? []) {
-        didSet { UserDefaults.standard.set(Array(excludedBundleIDs), forKey: "excludedBundleIDs") }
+    var excludedBundleIDs: Set<String> {
+        didSet { defaults.set(Array(excludedBundleIDs), forKey: "excludedBundleIDs") }
     }
 
-    var isPaused: Bool = UserDefaults.standard.bool(forKey: "isPaused") {
-        didSet { UserDefaults.standard.set(isPaused, forKey: "isPaused") }
+    var isPaused: Bool {
+        didSet { defaults.set(isPaused, forKey: "isPaused") }
+    }
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+
+        // Migrate the old `pollingInterval` key if present so existing users
+        // don't see a stale 30s value. Persist the migrated value under the
+        // new key and remove the legacy one so the migration only runs once.
+        // Note: property observers (didSet) don't fire during init, so any
+        // persistence here must be done explicitly against `defaults`.
+        let legacy = defaults.double(forKey: "pollingInterval")
+        let storedHeartbeat = defaults.double(forKey: "heartbeatInterval")
+        if storedHeartbeat != 0 {
+            self.heartbeatInterval = storedHeartbeat.clamped(to: 1...30)
+        } else if legacy != 0 {
+            let migrated = legacy.clamped(to: 1...30)
+            self.heartbeatInterval = migrated
+            defaults.set(migrated, forKey: "heartbeatInterval")
+            defaults.removeObject(forKey: "pollingInterval")
+        } else {
+            self.heartbeatInterval = 5
+        }
+
+        let storedIdle = defaults.double(forKey: "idleThreshold")
+        self.idleThreshold = storedIdle == 0 ? 300 : storedIdle.clamped(to: 60...900)
+
+        self.launchAtLogin = defaults.bool(forKey: "launchAtLogin")
+        self.excludedBundleIDs = Set(defaults.stringArray(forKey: "excludedBundleIDs") ?? [])
+        self.isPaused = defaults.bool(forKey: "isPaused")
     }
 }
 
