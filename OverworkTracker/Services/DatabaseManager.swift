@@ -73,6 +73,12 @@ final class DatabaseManager: Sendable {
         }
     }
 
+    func deleteAllSessions() throws {
+        try dbQueue.write { db in
+            try db.execute(sql: "DELETE FROM tracking_session")
+        }
+    }
+
     // MARK: - Read Operations
 
     func fetchSummaries(for date: Date) throws -> [AppUsageSummary] {

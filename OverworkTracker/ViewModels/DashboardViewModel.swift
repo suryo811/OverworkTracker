@@ -159,6 +159,23 @@ final class DashboardViewModel {
         return lines.joined(separator: "\n")
     }
 
+    func resetAllData() {
+        guard let db else { return }
+        tracker?.stop()
+        do {
+            try db.deleteAllSessions()
+        } catch {
+            print("Failed to reset data: \(error)")
+        }
+        appSummaries = []
+        totalSeconds = 0
+        monthlySummary = nil
+        if !settings.isPaused {
+            tracker?.start()
+        }
+        refresh()
+    }
+
     func exportCSV() {
         guard let db else { return }
 

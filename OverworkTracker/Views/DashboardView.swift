@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DashboardView: View {
     @Bindable var viewModel: DashboardViewModel
+    @State private var showResetConfirmation = false
     var body: some View {
         VStack(spacing: 0) {
             if !viewModel.showMonthlySummary {
@@ -76,11 +77,9 @@ struct DashboardView: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                    .frame(height: 140)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 260)
                 } else {
-                    let rowHeight: CGFloat = 32
-                    let maxListHeight: CGFloat = 360
-                    let listHeight = min(CGFloat(viewModel.appSummaries.count) * rowHeight + 16, maxListHeight)
                     ScrollView {
                         LazyVStack(spacing: 2) {
                             ForEach(viewModel.appSummaries) { summary in
@@ -90,7 +89,7 @@ struct DashboardView: View {
                         .padding(.horizontal)
                         .padding(.vertical, 8)
                     }
-                    .frame(height: listHeight)
+                    .frame(height: 260)
                 }
             } else {
                 // Monthly summary
@@ -135,15 +134,15 @@ struct DashboardView: View {
                 .foregroundStyle(.secondary)
                 .help(viewModel.showMonthlySummary ? "Show today" : "Show 30-day summary")
 
-                Button(action: viewModel.exportCSV) {
-                    Image(systemName: "square.and.arrow.up")
+                Button(action: { showResetConfirmation = true }) {
+                    Image(systemName: "arrow.counterclockwise")
                         .font(.caption)
                         .padding(6)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .help("Export last 30 days as CSV")
+                .help("Reset all tracking data")
 
                 Button(action: { NSApplication.shared.terminate(nil) }) {
                     Image(systemName: "power")
@@ -161,5 +160,83 @@ struct DashboardView: View {
             .padding(.bottom, 4)
         }
         .background(.ultraThinMaterial)
+        .overlay {
+            if showResetConfirmation {
+                ResetConfirmationOverlay(
+                    onCancel: { showResetConfirmation = false },
+                    onConfirm: {
+                        viewModel.resetAllData()
+                        showResetConfirmation = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+private struct ResetConfirmationOverlay: View {
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .onTapGesture(perform: onCancel)
+
+            VStack(spacing: 10) {
+                Text("Reset all tracking data?")
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+
+                Text("This permanently deletes every recorded session. This cannot be undone.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    Button(action: onCancel) {
+                        Text("Cancel")
+                            .font(.caption)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(.quaternary)
+                    )
+
+                    Button(action: onConfirm) {
+                        Text("Reset")
+                            .font(.caption.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.red.opacity(0.85))
+                    )
+                }
+                .padding(.top, 6)
+            }
+            .padding(16)
+            .frame(maxWidth: 240)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.ultraThinMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.4), radius: 16, y: 6)
+            .padding(.horizontal, 16)
+        }
     }
 }
