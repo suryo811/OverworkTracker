@@ -48,6 +48,18 @@ final class DatabaseManager: Sendable {
             )
         }
 
+        // One-shot cleanup: earlier versions tracked macOS's `loginwindow`
+        // (the lock/login screen) and `ScreenSaver.Engine` as if they were
+        // regular apps, which could silently accumulate hours per lock cycle
+        // (see ActiveWindowTracker.systemExcludedBundleIDs). Drop any such
+        // rows so historical summaries stop showing them.
+        migrator.registerMigration("v2_purge_system_bundles") { db in
+            try db.execute(sql: """
+                DELETE FROM tracking_session
+                WHERE bundleID IN ('com.apple.loginwindow', 'com.apple.ScreenSaver.Engine')
+                """)
+        }
+
         try migrator.migrate(dbQueue)
     }
 

@@ -36,6 +36,17 @@ final class ActiveWindowTracker {
     /// producing 30-hour sessions.
     static let maxSessionDuration: TimeInterval = 24 * 60 * 60
 
+    /// System-level bundle IDs that are never user-foreground work even though
+    /// macOS briefly reports them as the frontmost application. `loginwindow`
+    /// in particular is the lock/login screen process: if the Mac is locked
+    /// (clamshell, display sleep, Ctrl+Cmd+Q, screen saver lock) it becomes
+    /// frontmost for the duration of the lock, which without this filter
+    /// silently accumulates hours of "work" against it.
+    static let systemExcludedBundleIDs: Set<String> = [
+        "com.apple.loginwindow",
+        "com.apple.ScreenSaver.Engine",
+    ]
+
     private struct LiveSession {
         let id: Int64
         let bundleID: String?
@@ -175,8 +186,14 @@ final class ActiveWindowTracker {
 
     private func startNewSession(for app: FrontmostApp, at startedAt: Date) {
         // Excluded apps are tracked as "off" — no session created. Any
-        // previous session was already committed by the caller.
-        if let bid = app.bundleID, settings.excludedBundleIDs.contains(bid) {
+        // previous session was already committed by the caller. The
+        // system-excluded set is consulted in addition to the user's list so
+        // `loginwindow` / screensaver time can never be credited regardless
+        // of user settings.
+        if let bid = app.bundleID,
+           settings.excludedBundleIDs.contains(bid)
+            || Self.systemExcludedBundleIDs.contains(bid)
+        {
             return
         }
 
