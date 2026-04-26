@@ -2,7 +2,7 @@
 
 A minimal macOS menu bar app to track how you spend your time.
 
-![Preview](./assets/preview.png)
+![Preview](./tracker.png)
 
 ## ✨ Features
 - Real-time app usage tracking  
